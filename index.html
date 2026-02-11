@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schaak</title>
+  <link rel="stylesheet" href="/src/ui/styles.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Schaak</h1>
+    </header>
+    <main>
+      <div id="game-container">
+        <div id="game-info-panel">
+          <div id="captured-black" class="captured-pieces"></div>
+          <div id="game-status"></div>
+          <div id="captured-white" class="captured-pieces"></div>
+        </div>
+        <div id="board-container">
+          <div id="board"></div>
+        </div>
+        <div id="side-panel">
+          <div id="controls"></div>
+          <div id="move-history"></div>
+        </div>
+      </div>
+    </main>
+    <div id="promotion-dialog" class="hidden"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# Schaak - Browser Chess Game Implementation Plan
+
+## Context
+"Schaak" is Dutch for chess. Building a fully functional browser-based chess game
+with a strong AI opponent, served via Docker Compose.
+
+## Tech Stack
+- TypeScript (strict), Vite, Vitest, Plain CSS + CSS Grid
+- SVG pieces (embedded), nginx:alpine, Docker Compose
+- No frameworks, no external chess libraries
+
+## Architecture
+- Board: 0x88 representation (128-element array)
+- Move gen: Two-phase (pseudo-legal + legal filtering)
+- AI: Negamax + Alpha-Beta + Quiescence + Iterative Deepening
+- Transposition table with Zobrist hashing
+- Web Worker for AI computation
+
+## Implementation Phases
+Phase 1: Foundation - scaffolding, types, constants
+Phase 2: Chess Engine - board, moves, validation, perft, zobrist, game-state, notation
+Phase 3: AI - evaluation, search, move ordering, transposition, opening book, worker
+Phase 4: UI - board renderer, pieces, indicators, controls, info, promotion
+Phase 5: Integration & Docker
+Phase 6: Bug Fixing & Polish
+
+## Perft Validation Gates
+- Starting position depth 4 = 197,281
+- Kiwipete depth 3 = 97,862
+- Position 3 depth 4 = 43,238
+- Position 4 depth 4 = 422,333
+- Position 5 depth 4 = 2,103,487
