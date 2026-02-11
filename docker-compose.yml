@@ -2,4 +2,4 @@ services:
   schaak:
     build: .
     ports:
-      - "8080:80"
+      - "10050:80"
