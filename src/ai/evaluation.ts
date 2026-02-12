@@ -51,6 +51,19 @@ const PAWN_SHIELD_BONUS = 10;
 const PAWN_SHIELD_MISSING_PENALTY = -15;
 const OPEN_FILE_NEAR_KING_PENALTY = -20;
 
+// Configurable aggression factor (-50 to +50)
+// Positive = prefer attacking, mobile positions; Negative = prefer solid, safe positions
+let aggressionFactor = 0;
+
+/**
+ * Set the aggression factor for evaluation.
+ * Positive values weight mobility higher and king safety lower (attacking style).
+ * Negative values weight king safety higher and mobility lower (defensive style).
+ */
+export function setAggressionFactor(value: number): void {
+  aggressionFactor = Math.max(-50, Math.min(50, value));
+}
+
 /**
  * Compute game phase (0 = endgame, TOTAL_PHASE = opening/middlegame).
  */
@@ -393,11 +406,13 @@ export function evaluate(state: BoardState): number {
   // Pawn structure
   score += evaluatePawnStructure(state);
 
-  // Mobility (scaled down in endgame)
-  score += Math.round(evaluateMobility(state) * (0.5 + 0.5 * phaseRatio));
+  // Mobility (scaled down in endgame, boosted by aggression)
+  const mobilityScale = (0.5 + 0.5 * phaseRatio) * (1 + aggressionFactor * 0.015);
+  score += Math.round(evaluateMobility(state) * mobilityScale);
 
-  // King safety (more important in middlegame)
-  score += Math.round(evaluateKingSafety(state) * phaseRatio);
+  // King safety (more important in middlegame, boosted by negative aggression)
+  const kingSafetyScale = phaseRatio * (1 - aggressionFactor * 0.01);
+  score += Math.round(evaluateKingSafety(state) * kingSafetyScale);
 
   // Return from side-to-move perspective
   return state.sideToMove === Color.White ? score : -score;
