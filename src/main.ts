@@ -6,17 +6,21 @@ import {
   type WorkerSearchRequest,
   type WorkerSearchResult,
   type WorkerResponse,
+  type WorkerProgressUpdate,
+  type AIConfig,
   Piece,
   Color,
   MoveFlag,
   GameMode,
   GameResult,
+  ColorChoice,
 } from './types';
 import { INITIAL_FEN, pieceColor } from './constants';
 import { parseFEN, cloneState } from './engine/board';
 import { generateLegalMoves, makeMove, isInCheck } from './engine/validation';
 import { getGameResult } from './engine/game-state';
 import { moveToSAN } from './engine/notation';
+import { evaluate } from './ai/evaluation';
 import { createBoardRenderer, type BoardRenderer } from './ui/board-renderer';
 import { showMoveIndicators, clearMoveIndicators } from './ui/move-indicators';
 import { showPromotionDialog } from './ui/promotion-dialog';
@@ -31,6 +35,7 @@ let moveHistory: { move: Move; san: string; undoState: BoardState }[] = [];
 let capturedByWhite: Piece[] = []; // Black pieces captured by white
 let capturedByBlack: Piece[] = []; // White pieces captured by black
 let gameOver = false;
+let colorChoice: ColorChoice = ColorChoice.Random;
 
 // --- UI components ---
 let renderer: BoardRenderer;
@@ -61,19 +66,36 @@ function initWorker(): void {
 }
 
 function handleWorkerMessage(msg: WorkerResponse): void {
-  if (msg.type === 'result') {
+  if (msg.type === 'progress') {
+    const progress = msg as WorkerProgressUpdate;
+    controls.updateThinkingProgress(progress.depth, ui.aiConfig.depth, progress.nodesSearched);
+  } else if (msg.type === 'result') {
     const result = msg as WorkerSearchResult;
     ui.aiThinking = false;
     controls.setThinking(false);
 
+    // Show search stats
+    controls.showSearchResult(result.depth, result.nodesSearched, result.timeMs, result.score);
+
     if (result.bestMove) {
+      // Store the AI's evaluation score (from white's perspective)
+      const aiScore = ui.humanColor === Color.White ? -result.score : result.score;
       executeMove(result.bestMove);
+      // Update eval bar with the score from the AI's perspective converted to white's
+      info.updateEvalBar(aiScore);
     }
   }
-  // Progress updates could be shown in UI but we keep it simple
 }
 
 // --- Game Logic ---
+
+function resolveHumanColor(): Color {
+  switch (colorChoice) {
+    case ColorChoice.White: return Color.White;
+    case ColorChoice.Black: return Color.Black;
+    case ColorChoice.Random: return Math.random() < 0.5 ? Color.White : Color.Black;
+  }
+}
 
 function initGame(): void {
   boardState = parseFEN(INITIAL_FEN);
@@ -83,20 +105,43 @@ function initGame(): void {
   capturedByBlack = [];
   gameOver = false;
 
+  // Determine human color for AI games
+  const humanColor = ui ? ui.humanColor : resolveHumanColor();
+  const newHumanColor = ui && ui.gameMode === GameMode.HumanVsAI ? resolveHumanColor() : humanColor;
+
   ui = {
     selectedSquare: null,
     legalMovesForSelected: [],
-    boardFlipped: false,
-    gameMode: ui ? ui.gameMode : GameMode.HumanVsHuman,
+    boardFlipped: ui ? ui.boardFlipped : false,
+    gameMode: ui ? ui.gameMode : GameMode.HumanVsAI,
     aiDepth: ui ? ui.aiDepth : 5,
     aiThinking: false,
+    humanColor: newHumanColor,
+    aiConfig: ui ? ui.aiConfig : {
+      depth: 5,
+      useBook: true,
+      aggression: 0,
+      randomness: 0,
+    },
   };
 
+  // Auto-flip board so human's pieces are at the bottom
+  if (ui.gameMode === GameMode.HumanVsAI) {
+    ui.boardFlipped = ui.humanColor === Color.Black;
+  }
+
   controls.setThinking(false);
+  controls.clearStats();
   info.clearMoves();
   info.updateCapturedPieces(capturedByWhite, capturedByBlack);
+  info.updateEvalBar(0);
   updateStatusText();
   renderBoard();
+
+  // If AI plays white, trigger AI first move
+  if (ui.gameMode === GameMode.HumanVsAI && ui.humanColor === Color.Black && !gameOver) {
+    triggerAI();
+  }
 }
 
 function renderBoard(): void {
@@ -136,11 +181,19 @@ function updateStatusText(): void {
   }
 }
 
+function computeEvalForDisplay(): number {
+  // Compute evaluation from white's perspective
+  const evalScore = evaluate(boardState);
+  // evaluate() returns from side-to-move's perspective
+  // Convert to white's perspective
+  return boardState.sideToMove === Color.White ? evalScore : -evalScore;
+}
+
 function handleSquareClick(sq: Square88): void {
   if (gameOver || ui.aiThinking) return;
 
-  // If in HvAI mode and it's black's turn, ignore clicks
-  if (ui.gameMode === GameMode.HumanVsAI && boardState.sideToMove === Color.Black) return;
+  // In HvAI mode, ignore clicks when it's the AI's turn
+  if (ui.gameMode === GameMode.HumanVsAI && boardState.sideToMove !== ui.humanColor) return;
 
   const piece = boardState.board[sq];
 
@@ -161,12 +214,16 @@ function handleSquareClick(sq: Square88): void {
           const promoMove = promotionMoves.find(m => m.flag === flag);
           if (promoMove) {
             executeMove(promoMove);
+            // Update eval bar after human move
+            info.updateEvalBar(computeEvalForDisplay());
           }
         });
         return;
       }
 
       executeMove(targetMove);
+      // Update eval bar after human move
+      info.updateEvalBar(computeEvalForDisplay());
       return;
     }
 
@@ -251,7 +308,7 @@ function executeMove(move: Move): void {
   renderBoard();
 
   // Trigger AI if needed
-  if (ui.gameMode === GameMode.HumanVsAI && boardState.sideToMove === Color.Black && !gameOver) {
+  if (ui.gameMode === GameMode.HumanVsAI && boardState.sideToMove !== ui.humanColor && !gameOver) {
     triggerAI();
   }
 }
@@ -269,8 +326,9 @@ function triggerAI(): void {
   const request: WorkerSearchRequest = {
     type: 'search',
     state: cloneState(boardState),
-    depth: ui.aiDepth,
+    depth: ui.aiConfig.depth,
     positionHistory: [...positionHistory],
+    aiConfig: ui.aiConfig,
   };
 
   worker.postMessage(request);
@@ -319,6 +377,7 @@ function undoMove(): void {
   ui.legalMovesForSelected = [];
 
   info.updateCapturedPieces(capturedByWhite, capturedByBlack);
+  info.updateEvalBar(computeEvalForDisplay());
   updateStatusText();
   renderBoard();
 }
@@ -341,20 +400,37 @@ function main(): void {
     },
     onDepthChange: (depth: number) => {
       ui.aiDepth = depth;
+      ui.aiConfig = { ...ui.aiConfig, depth };
+    },
+    onAIConfigChange: (config: AIConfig) => {
+      ui.aiConfig = config;
+      ui.aiDepth = config.depth;
+    },
+    onColorChoiceChange: (choice: ColorChoice) => {
+      colorChoice = choice;
     },
   });
 
   renderer.setSquareClickHandler(handleSquareClick);
 
-  // Initialize default UI state
+  // Initialize default UI state - AI mode is the default
   ui = {
     selectedSquare: null,
     legalMovesForSelected: [],
     boardFlipped: false,
-    gameMode: GameMode.HumanVsHuman,
+    gameMode: GameMode.HumanVsAI,
     aiDepth: 5,
     aiThinking: false,
+    humanColor: Color.White,
+    aiConfig: {
+      depth: 5,
+      useBook: true,
+      aggression: 0,
+      randomness: 0,
+    },
   };
+
+  controls.setMode(GameMode.HumanVsAI);
 
   initWorker();
   initGame();

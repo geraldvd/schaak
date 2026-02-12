@@ -104,12 +104,21 @@ export interface TTEntry {
   bestMove: Move | null;
 }
 
+// AI configuration options
+export interface AIConfig {
+  depth: number;          // 1-8
+  useBook: boolean;       // opening book on/off
+  aggression: number;     // -50 to +50 (negative=defensive, positive=aggressive)
+  randomness: number;     // 0-50 centipawns of random noise
+}
+
 // AI worker messages
 export interface WorkerSearchRequest {
   type: 'search';
   state: BoardState;
   depth: number;
   positionHistory: number[];
+  aiConfig?: AIConfig;
 }
 
 export interface WorkerSearchResult {
@@ -138,6 +147,13 @@ export const enum GameMode {
   HumanVsAI = 1,
 }
 
+// Color assignment for AI games
+export const enum ColorChoice {
+  White = 0,
+  Black = 1,
+  Random = 2,
+}
+
 // UI selection state
 export interface UIState {
   selectedSquare: Square88 | null;
@@ -146,4 +162,6 @@ export interface UIState {
   gameMode: GameMode;
   aiDepth: number;
   aiThinking: boolean;
+  humanColor: Color;       // which color the human plays in HvAI mode
+  aiConfig: AIConfig;
 }

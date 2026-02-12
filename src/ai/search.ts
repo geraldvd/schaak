@@ -30,6 +30,7 @@ export interface SearchOptions {
   maxDepth: number;
   useBook?: boolean;
   positionHistory?: number[];
+  randomness?: number;
   onProgress?: (update: WorkerProgressUpdate) => void;
 }
 
@@ -39,6 +40,7 @@ export class SearchEngine {
   private history: HistoryTable;
   private nodesSearched: number = 0;
   private positionHistory: number[] = [];
+  private randomness: number = 0; // centipawns of noise at root
 
   constructor() {
     this.tt = new TranspositionTable();
@@ -54,6 +56,7 @@ export class SearchEngine {
     this.killers.clear();
     this.history.clear();
     this.positionHistory = options.positionHistory || [];
+    this.randomness = options.randomness || 0;
 
     const legalMoves = generateLegalMoves(state);
     if (legalMoves.length === 0) {
@@ -131,6 +134,11 @@ export class SearchEngine {
       }
 
       unmakeMove(state, move, undo);
+
+      // Add randomness at root level for varied play
+      if (this.randomness > 0 && Math.abs(score) < MATE_SCORE - 200) {
+        score += Math.floor(Math.random() * this.randomness * 2 + 1) - this.randomness;
+      }
 
       if (score > bestScore) {
         bestScore = score;

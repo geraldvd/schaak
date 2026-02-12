@@ -9,6 +9,7 @@ export interface GameInfo {
   updateCapturedPieces(capturedByWhite: Piece[], capturedByBlack: Piece[]): void;
   highlightCurrentMove(moveIndex: number): void;
   popMove(): void;
+  updateEvalBar(scoreCentipawns: number): void;
 }
 
 // Sort captured pieces for display: Q, R, B, N, P
@@ -33,6 +34,8 @@ export function createGameInfo(): GameInfo {
   const capturedBlackEl = document.getElementById('captured-black')!;
   const capturedWhiteEl = document.getElementById('captured-white')!;
   const historyEl = document.getElementById('move-history')!;
+  const evalBarFill = document.getElementById('eval-bar-fill')!;
+  const evalText = document.getElementById('eval-text')!;
 
   // Initialize history
   historyEl.innerHTML = '';
@@ -159,6 +162,43 @@ export function createGameInfo(): GameInfo {
     }
   }
 
+  function updateEvalBar(scoreCentipawns: number): void {
+    // Score from white's perspective (positive = white advantage)
+    // Clamp to [-1000, 1000] for display
+    const MATE_SCORE = 900000;
+    let displayScore: number;
+    let text: string;
+
+    if (Math.abs(scoreCentipawns) > MATE_SCORE - 200) {
+      // Mate score
+      const movesToMate = Math.ceil((MATE_SCORE - Math.abs(scoreCentipawns)) / 2);
+      displayScore = scoreCentipawns > 0 ? 1000 : -1000;
+      text = scoreCentipawns > 0 ? `M${movesToMate}` : `-M${movesToMate}`;
+    } else {
+      displayScore = Math.max(-1000, Math.min(1000, scoreCentipawns));
+      const pawns = scoreCentipawns / 100;
+      text = (pawns >= 0 ? '+' : '') + pawns.toFixed(1);
+    }
+
+    // Convert to percentage (50% = equal, 100% = max white, 0% = max black)
+    // Use sigmoid-like curve for better visualization
+    const whitePercent = 50 + (displayScore / 1000) * 50;
+    evalBarFill.style.height = `${whitePercent}%`;
+    evalText.textContent = text;
+
+    // Color the text based on who's ahead
+    if (displayScore > 10) {
+      evalText.className = 'eval-white';
+    } else if (displayScore < -10) {
+      evalText.className = 'eval-black';
+    } else {
+      evalText.className = '';
+    }
+  }
+
+  // Initialize eval bar to equal
+  updateEvalBar(0);
+
   return {
     addMove,
     clearMoves,
@@ -166,6 +206,7 @@ export function createGameInfo(): GameInfo {
     updateCapturedPieces,
     highlightCurrentMove,
     popMove,
+    updateEvalBar,
   };
 }
 
