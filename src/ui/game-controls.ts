@@ -257,6 +257,38 @@ export function createGameControls(callbacks: GameControlsCallbacks): GameContro
   randGroup.appendChild(randHint);
   aiSettingsSection.appendChild(randGroup);
 
+  // --- Min. Answer Time ---
+  const timeGroup = createSettingGroup('Min. Answer Time');
+  const timeRow = document.createElement('div');
+  timeRow.className = 'setting-slider-row';
+
+  const timeSlider = document.createElement('input');
+  timeSlider.type = 'range';
+  timeSlider.min = '0';
+  timeSlider.max = '5';
+  timeSlider.step = '0.5';
+  timeSlider.value = '0';
+  timeSlider.id = 'time-slider';
+
+  const timeValue = document.createElement('span');
+  timeValue.className = 'setting-value';
+  timeValue.textContent = '0s';
+
+  const timeHint = document.createElement('div');
+  timeHint.className = 'setting-hint';
+  timeHint.textContent = 'Minimum time before AI moves';
+
+  timeSlider.addEventListener('input', () => {
+    timeValue.textContent = timeSlider.value + 's';
+    updateAIConfig();
+  });
+
+  timeRow.appendChild(timeSlider);
+  timeRow.appendChild(timeValue);
+  timeGroup.appendChild(timeRow);
+  timeGroup.appendChild(timeHint);
+  aiSettingsSection.appendChild(timeGroup);
+
   settingsBody.appendChild(aiSettingsSection);
 
   function updateAIConfig(): void {
@@ -265,6 +297,7 @@ export function createGameControls(callbacks: GameControlsCallbacks): GameContro
       useBook: bookToggle.checked,
       aggression: parseInt(styleSlider.value),
       randomness: parseInt(randSlider.value),
+      minAnswerTime: parseFloat(timeSlider.value),
     };
     callbacks.onAIConfigChange(config);
   }

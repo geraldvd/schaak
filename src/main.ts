@@ -36,6 +36,8 @@ let capturedByWhite: Piece[] = []; // Black pieces captured by white
 let capturedByBlack: Piece[] = []; // White pieces captured by black
 let gameOver = false;
 let colorChoice: ColorChoice = ColorChoice.Random;
+let aiSearchStartTime = 0;
+let aiDelayTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // --- UI components ---
 let renderer: BoardRenderer;
@@ -65,24 +67,39 @@ function initWorker(): void {
   }
 }
 
+function applyAIResult(result: WorkerSearchResult): void {
+  ui.aiThinking = false;
+  controls.setThinking(false);
+
+  // Show search stats
+  controls.showSearchResult(result.depth, result.nodesSearched, result.timeMs, result.score);
+
+  if (result.bestMove) {
+    // Store the AI's evaluation score (from white's perspective)
+    const aiScore = ui.humanColor === Color.White ? -result.score : result.score;
+    executeMove(result.bestMove);
+    // Update eval bar with the score from the AI's perspective converted to white's
+    info.updateEvalBar(aiScore);
+  }
+}
+
 function handleWorkerMessage(msg: WorkerResponse): void {
   if (msg.type === 'progress') {
     const progress = msg as WorkerProgressUpdate;
     controls.updateThinkingProgress(progress.depth, ui.aiConfig.depth, progress.nodesSearched);
   } else if (msg.type === 'result') {
     const result = msg as WorkerSearchResult;
-    ui.aiThinking = false;
-    controls.setThinking(false);
+    const minTime = (ui.aiConfig.minAnswerTime ?? 0) * 1000;
+    const elapsed = performance.now() - aiSearchStartTime;
+    const remaining = minTime - elapsed;
 
-    // Show search stats
-    controls.showSearchResult(result.depth, result.nodesSearched, result.timeMs, result.score);
-
-    if (result.bestMove) {
-      // Store the AI's evaluation score (from white's perspective)
-      const aiScore = ui.humanColor === Color.White ? -result.score : result.score;
-      executeMove(result.bestMove);
-      // Update eval bar with the score from the AI's perspective converted to white's
-      info.updateEvalBar(aiScore);
+    if (remaining > 0) {
+      aiDelayTimeout = setTimeout(() => {
+        aiDelayTimeout = null;
+        applyAIResult(result);
+      }, remaining);
+    } else {
+      applyAIResult(result);
     }
   }
 }
@@ -98,6 +115,10 @@ function resolveHumanColor(): Color {
 }
 
 function initGame(): void {
+  if (aiDelayTimeout !== null) {
+    clearTimeout(aiDelayTimeout);
+    aiDelayTimeout = null;
+  }
   boardState = parseFEN(INITIAL_FEN);
   positionHistory = [boardState.zobristHash];
   moveHistory = [];
@@ -122,6 +143,7 @@ function initGame(): void {
       useBook: true,
       aggression: 0,
       randomness: 0,
+      minAnswerTime: 0,
     },
   };
 
@@ -331,6 +353,7 @@ function triggerAI(): void {
     aiConfig: ui.aiConfig,
   };
 
+  aiSearchStartTime = performance.now();
   worker.postMessage(request);
 }
 
@@ -376,6 +399,7 @@ function undoMove(): void {
   ui.selectedSquare = null;
   ui.legalMovesForSelected = [];
 
+  controls.clearStats();
   info.updateCapturedPieces(capturedByWhite, capturedByBlack);
   info.updateEvalBar(computeEvalForDisplay());
   updateStatusText();
@@ -427,6 +451,7 @@ function main(): void {
       useBook: true,
       aggression: 0,
       randomness: 0,
+      minAnswerTime: 0,
     },
   };
 
