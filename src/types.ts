@@ -110,6 +110,7 @@ export interface AIConfig {
   useBook: boolean;       // opening book on/off
   aggression: number;     // -50 to +50 (negative=defensive, positive=aggressive)
   randomness: number;     // 0-50 centipawns of random noise
+  minAnswerTime: number;  // 0-5 seconds minimum before AI moves
 }
 
 // AI worker messages
