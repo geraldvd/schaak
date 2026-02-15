@@ -1,5 +1,15 @@
 services:
   schaak:
     build: .
-    ports:
-      - "10050:80"
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.schaak.rule=Host(`schaak.g91.dev`)
+      - traefik.http.routers.schaak.tls=true
+      - traefik.http.routers.schaak.tls.certresolver=le
+      - traefik.http.services.schaak.loadbalancer.server.port=80
+
+networks:
+  proxy:
+    external: true
