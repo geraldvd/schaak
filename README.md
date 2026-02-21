@@ -1,6 +1,7 @@
 # Schaak
 
-A browser-based chess application with a built-in AI opponent. "Schaak" is Dutch for chess.
+A browser-based chess application with a built-in AI opponent. "Schaak" is Dutch for chess. 
+The game is made as a Claude Code experiment during a skiing trip in Fiss, Austria. The experiment succeeded - the chess game works.
 
 ## Features
 
